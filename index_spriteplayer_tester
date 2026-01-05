@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sprite Player — Improved V0.01</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root{--bg:#f3f4f6;--panel:#0b1220;--accent:#06b6d4;--muted:#6b7280;--white:#0f1720;--debug-bg:rgba(0,0,0,0.65);--debug-color:#00ffff;--mono:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;--canvas-default-bg:#0b1220}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--white);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{max-width:1200px;margin:18px auto;padding:12px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}
+  h2{margin:0 0 6px 0;color:#111827}
+  .layout{display:flex;gap:16px;align-items:flex-start;width:100%;box-sizing:border-box}
+  .left{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:12px;align-items:stretch}
+  .right{flex:0 0 320px;min-width:220px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+  canvas{display:block;border-radius:6px;background:var(--canvas-default-bg);box-shadow:0 6px 18px rgba(2,6,23,0.06);width:100%;height:auto}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{padding:8px 12px;border-radius:6px;border:none;background:#111827;color:#fff;cursor:pointer}
+  button[disabled]{opacity:0.45;cursor:not-allowed}
+  #stopBtn{background:#b91c1c} #resetSpriteBtn{background:#2563eb}
+  .dropzone{height:110px;border:2px dashed #6b7280;border-radius:8px;background:#fafafa;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;color:#374151}
+  .dropzone.dragover{border-color:#2563eb;background:#eef6ff}
+  .rows{display:flex;gap:8px;flex-wrap:wrap}
+  .rowBtn{padding:6px 10px;background:#4b5563;color:#fff;border-radius:6px;cursor:pointer;font-size:13px}
+  textarea{width:100%;height:140px;font-family:monospace;font-size:13px;padding:8px;border-radius:6px;border:1px solid #d1d5db;resize:vertical}
+  .meta{font-size:13px;color:#374151}
+  .progress{height:10px;background:#e5e7eb;border-radius:6px;overflow:hidden;width:100%}
+  .progress-bar{height:100%;background:#2563eb;width:0%;transition:width 120ms linear}
+  .debug-toggle-row{display:flex;justify-content:center;margin-top:6px}
+  .debug-toggle{padding:8px 12px;border-radius:6px;border:none;background:#0f1720;color:#fff;cursor:pointer}
+  .debug-hud{width:100%;background:var(--debug-bg);color:var(--debug-color);font-family:var(--mono);font-size:13px;line-height:1.4;padding:8px 12px;box-sizing:border-box;border-radius:6px;overflow:auto;display:none;white-space:pre-wrap}
+  .debug-hud.collapsed{display:block;height:28px;overflow:hidden}
+  .debug-hud.expanded{display:block;max-height:1500px;overflow:auto}
+  .debug-hud .title{font-weight:700;margin-bottom:6px}
+  .hud-small{font-size:12px;color:#9bd}
+  .notice{padding:10px;border-radius:6px;background:#fff3cd;color:#92400e;border:1px solid #f5c6a5;font-size:13px}
+  .error-list{background:#fff; color:#111; padding:8px; border-radius:6px; font-family:monospace; font-size:13px; white-space:pre-wrap; max-height:260px; overflow:auto}
+  @media (max-width:900px){.layout{flex-direction:column}.right{width:100%;flex:0 0 auto;min-width:0}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Sprite Player — Improved V0.01</h2>
+    <div class="layout">
+      <div class="left">
+        <canvas id="canvas" width="1200" height="450" role="img" aria-label="Sprite preview canvas"></canvas>
+
+        <div class="controls" aria-label="Playback controls">
+          <button id="playRow" disabled>Play Selected Row</button>
+          <button id="stopBtn" disabled>Stop</button>
+          <button id="resetSpriteBtn" disabled title="Reset sprite position and frame">Reset Sprite</button>
+          <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="globalLoop" /> Loop Global</label>
+          <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="showGrid" /> Grid</label>
+        </div>
+
+        <div class="meta">Drop a background and a spritesheet. Sprite origin default at 690,737 in 3600×1350 space (scaled to canvas).</div>
+
+        <div class="progress" aria-hidden="true"><div id="progressBar" class="progress-bar"></div></div>
+
+        <div class="rows" id="rowButtons" aria-label="Row buttons"></div>
+
+        <div class="debug-toggle-row">
+          <button id="debugToggle" class="debug-toggle">Debug Panel</button>
+        </div>
+
+        <div id="debugHud" class="debug-hud collapsed" aria-hidden="true">
+          <div class="title">▼ Debug Panel (collapsed)</div>
+          <div id="debugContent" class="hud-small"></div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div id="configNotice" class="notice">No config loaded. Drop config.json or paste JSON and click Apply Config.</div>
+
+        <div id="bgDrop" class="dropzone">Drop Background<br>recommended 3600×1350</div>
+        <div id="spriteDrop" class="dropzone">Drop Spritesheet<br>frames 450×450</div>
+
+        <div style="height:8px"></div>
+
+        <div class="meta">Config JSON (required)</div>
+        <div id="configDrop" class="dropzone">Drop config.json here</div>
+
+        <textarea id="configText" placeholder='Paste JSON here'></textarea>
+        <div style="display:flex;gap:8px">
+          <button id="applyConfigBtn">Apply Config</button>
+          <button id="validateBtn">Validate Only</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ============================================================
+   Sprite Player — Improved single-file script (V0.01)
+   - VERSION constant added and title updated
+   - When you instruct to save a new version, update VERSION and the saved snapshot label
+   ============================================================ */
+
+/* -------------------------
+   Versioning
+   ------------------------- */
+const VERSION = 'V0.01';
+document.title = `Sprite Player — Improved ${VERSION}`;
+
+/* -------------------------
+   Utilities and Easing
+   ------------------------- */
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp = (a,b,t)=>a+(b-a)*t;
+const easingFuncs = {
+  linear: t => t,
+  easeOutQuad: t => 1 - (1 - t) * (1 - t),
+  easeInQuad: t => t * t,
+  easeInOutQuad: t => t<0.5?2*t*t:1-(-2*t+2)*( -2*t+2)/2
+};
+
+/* -------------------------
+   DOM refs and state
+   ------------------------- */
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const bgDrop = document.getElementById('bgDrop');
+const spriteDrop = document.getElementById('spriteDrop');
+const configDrop = document.getElementById('configDrop');
+const configText = document.getElementById('configText');
+const applyConfigBtn = document.getElementById('applyConfigBtn');
+const validateBtn = document.getElementById('validateBtn');
+const rowButtons = document.getElementById('rowButtons');
+const playRowBtn = document.getElementById('playRow');
+const stopBtn = document.getElementById('stopBtn');
+const resetSpriteBtn = document.getElementById('resetSpriteBtn');
+const debugToggle = document.getElementById('debugToggle');
+const debugHud = document.getElementById('debugHud');
+const debugContent = document.getElementById('debugContent');
+const configNotice = document.getElementById('configNotice');
+const progressBar = document.getElementById('progressBar');
+const globalLoopCheckbox = document.getElementById('globalLoop');
+const showGridCheckbox = document.getElementById('showGrid');
+
+let state = {
+  bgImage: null,
+  spriteImage: null,
+  config: null,
+  selectedRow: null,
+  playing: false,
+  frameIndex: 0,
+  elapsedInFrame: 0,
+  actionState: null, // { type, startTime, duration, steps, currentStepIndex }
+  lastTick: null,
+  canvasScale: 1,
+  spriteOrigin: { x: 690, y: 737 } // in 3600x1350 space; scaled to canvas
+};
+
+/* -------------------------
+   Image loading helpers
+   ------------------------- */
+function loadImageFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
+    img.src = url;
+  });
+}
+
+/* -------------------------
+   Config validation
+   - returns { valid: bool, errors: [] }
+   ------------------------- */
+function validateConfig(cfg){
+  const errors = [];
+  if(!cfg || typeof cfg !== 'object') { errors.push('Config must be a JSON object.'); return {valid:false,errors}; }
+  if(!Array.isArray(cfg.rows)) { errors.push('Top-level "rows" array is required.'); return {valid:false,errors}; }
+  cfg.rows.forEach((r,idx)=>{
+    const base = `rows[${idx}]`;
+    if(!r || typeof r !== 'object'){ errors.push(`${base} must be an object.`); return; }
+    if(typeof r.name !== 'string') errors.push(`${base}.name must be a string.`);
+    if(!Number.isInteger(r.frames) || r.frames <= 0) errors.push(`${base}.frames must be a positive integer.`);
+    if(!Number.isInteger(r.duration) || r.duration <= 0) errors.push(`${base}.duration must be a positive integer (ms).`);
+    if(typeof r.loop !== 'boolean') errors.push(`${base}.loop must be boolean.`);
+    if(typeof r.ideal !== 'boolean') errors.push(`${base}.ideal must be boolean.`);
+    if(r.action){
+      if(typeof r.action !== 'object') { errors.push(`${base}.action must be an object.`); return; }
+      const act = r.action;
+      if(act.type === 'move' || act.type === 'arc'){
+        if(typeof act.duration !== 'number' || act.duration <= 0) errors.push(`${base}.action.duration must be a positive number.`);
+        if(typeof act.dx !== 'number') errors.push(`${base}.action.dx must be a number.`);
+        if(typeof act.dy !== 'number') errors.push(`${base}.action.dy must be a number.`);
+        if(act.easing && typeof act.easing !== 'string') errors.push(`${base}.action.easing must be a string if provided.`);
+      } else if(act.type === 'moveTo'){
+        if(typeof act.duration !== 'number' || act.duration <= 0) errors.push(`${base}.action.duration must be a positive number.`);
+        if(typeof act.x !== 'number' || typeof act.y !== 'number') errors.push(`${base}.action.x and .y must be numbers.`);
+      } else if(act.type === 'sequence'){
+        if(!Array.isArray(act.steps) || act.steps.length === 0) errors.push(`${base}.action.steps must be a non-empty array.`);
+        else {
+          act.steps.forEach((s,si)=>{
+            if(typeof s.type !== 'string') errors.push(`${base}.action.steps[${si}].type must be a string.`);
+            if(typeof s.duration !== 'number' || s.duration <= 0) errors.push(`${base}.action.steps[${si}].duration must be positive number.`);
+            if(typeof s.dx !== 'number') errors.push(`${base}.action.steps[${si}].dx must be a number.`);
+            if(typeof s.dy !== 'number') errors.push(`${base}.action.steps[${si}].dy must be a number.`);
+          });
+        }
+      } else {
+        errors.push(`${base}.action.type "${act.type}" is not supported.`);
+      }
+    }
+  });
+  return { valid: errors.length === 0, errors };
+}
+
+/* -------------------------
+   Apply config to UI
+   ------------------------- */
+function applyConfig(cfg){
+  const v = validateConfig(cfg);
+  if(!v.valid){
+    showConfigErrors(v.errors);
+    return false;
+  }
+  state.config = cfg;
+  createRowButtons(cfg.rows);
+  configNotice.textContent = 'Config loaded. Select a row to play.';
+  configNotice.className = '';
+  return true;
+}
+
+/* -------------------------
+   Show config errors
+   ------------------------- */
+function showConfigErrors(errors){
+  configNotice.className = 'notice';
+  configNotice.innerHTML = '<strong>Config errors</strong><br>' + errors.map(e=>`- ${e}`).join('<br>');
+}
+
+/* -------------------------
+   Create row buttons
+   ------------------------- */
+function createRowButtons(rows){
+  rowButtons.innerHTML = '';
+  rows.forEach((r,idx)=>{
+    const btn = document.createElement('button');
+    btn.className = 'rowBtn';
+    btn.textContent = `${r.name}`;
+    btn.title = `Frames: ${r.frames} • ${r.duration}ms • loop:${r.loop} • ideal:${r.ideal}`;
+    btn.addEventListener('click', ()=>selectRow(idx));
+    rowButtons.appendChild(btn);
+  });
+}
+
+/* -------------------------
+   Select row
+   ------------------------- */
+function selectRow(index){
+  state.selectedRow = index;
+  state.frameIndex = 0;
+  state.elapsedInFrame = 0;
+  state.actionState = null;
+  playRowBtn.disabled = false;
+  resetSpriteBtn.disabled = false;
+  updateDebug();
+}
+
+/* -------------------------
+   Play / Stop logic
+   ------------------------- */
+function playSelectedRow(){
+  if(state.playing) return;
+  if(state.selectedRow === null) return;
+  state.playing = true;
+  playRowBtn.disabled = true;
+  stopBtn.disabled = false;
+  state.lastTick = performance.now();
+  // initialize action if present
+  const cfgRow = state.config.rows[state.selectedRow];
+  if(cfgRow.action){
+    startAction(cfgRow.action);
+  }
+  requestAnimationFrame(tick);
+}
+
+function stopPlayback(){
+  state.playing = false;
+  playRowBtn.disabled = false;
+  stopBtn.disabled = true;
+  state.actionState = null;
+  updateDebug();
+}
+
+/* -------------------------
+   Start action (normalizes sequence)
+   ------------------------- */
+function startAction(action){
+  if(!action) return;
+  if(action.type === 'sequence'){
+    state.actionState = {
+      type: 'sequence',
+      steps: action.steps.map(s=>Object.assign({}, s)),
+      currentStep: 0,
+      stepElapsed: 0,
+      totalDuration: action.steps.reduce((s,x)=>s+(x.duration||0),0),
+      startTime: performance.now()
+    };
+  } else {
+    state.actionState = {
+      type: action.type,
+      dx: action.dx||0,
+      dy: action.dy||0,
+      duration: action.duration||0,
+      easing: action.easing||'linear',
+      startTime: performance.now()
+    };
+  }
+}
+
+/* -------------------------
+   Tick loop
+   ------------------------- */
+function tick(now){
+  if(!state.playing){ draw(); return; }
+  const dt = now - (state.lastTick || now);
+  state.lastTick = now;
+
+  // advance frame timing
+  const cfgRow = state.config.rows[state.selectedRow];
+  const frameDur = cfgRow.duration;
+  state.elapsedInFrame += dt;
+  while(state.elapsedInFrame >= frameDur){
+    state.elapsedInFrame -= frameDur;
+    state.frameIndex = (state.frameIndex + 1) % cfgRow.frames;
+    // if not looping and no action and not ideal, stop at last frame
+    if(!cfgRow.loop && !cfgRow.action && !cfgRow.ideal && state.frameIndex === cfgRow.frames - 1){
+      stopPlayback();
+      break;
+    }
+  }
+
+  // update action state
+  if(state.actionState){
+    updateAction(dt, cfgRow);
+  }
+
+  draw();
+  updateDebug();
+
+  if(state.playing) requestAnimationFrame(tick);
+}
+
+/* -------------------------
+   Update action state
+   ------------------------- */
+function updateAction(dt, cfgRow){
+  const a = state.actionState;
+  if(a.type === 'sequence'){
+    a.stepElapsed += dt;
+    const step = a.steps[a.currentStep];
+    if(a.stepElapsed >= step.duration){
+      a.stepElapsed -= step.duration;
+      a.currentStep++;
+      if(a.currentStep >= a.steps.length){
+        // sequence finished
+        state.actionState = null;
+        // decide whether to keep looping frames
+        if(!cfgRow.ideal && !cfgRow.loop){
+          state.frameIndex = cfgRow.frames - 1;
+          stopPlayback();
+        }
+      }
+    }
+  } else {
+    const elapsed = performance.now() - a.startTime;
+    if(elapsed >= a.duration){
+      // action finished
+      state.actionState = null;
+      if(!cfgRow.ideal && !cfgRow.loop){
+        state.frameIndex = cfgRow.frames - 1;
+        stopPlayback();
+      }
+    }
+  }
+}
+
+/* -------------------------
+   Compute sprite offset from action
+   Returns {x,y}
+   ------------------------- */
+function computeActionOffset(){
+  if(!state.actionState) return {x:0,y:0};
+  const a = state.actionState;
+  if(a.type === 'sequence'){
+    // sum completed steps + partial current
+    let x=0,y=0;
+    for(let i=0;i<a.currentStep;i++){
+      x += a.steps[i].dx||0;
+      y += a.steps[i].dy||0;
+    }
+    if(a.currentStep < a.steps.length){
+      const step = a.steps[a.currentStep];
+      const t = clamp(a.stepElapsed / step.duration, 0, 1);
+      const ease = easingFuncs[step.easing] || easingFuncs.linear;
+      const p = ease(t);
+      x += (step.dx||0) * p;
+      y += (step.dy||0) * p;
+    }
+    return {x,y};
+  } else {
+    const elapsed = performance.now() - a.startTime;
+    const t = clamp(elapsed / a.duration, 0, 1);
+    const ease = easingFuncs[a.easing] || easingFuncs.linear;
+    const p = ease(t);
+    return { x: (a.dx||0) * p, y: (a.dy||0) * p };
+  }
+}
+
+/* -------------------------
+   Draw function
+   - scales background to canvas
+   - draws sprite frame at origin with action offset
+   ------------------------- */
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // draw background if present
+  if(state.bgImage){
+    // scale to fill canvas while preserving aspect
+    const img = state.bgImage;
+    const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+    const w = img.width * scale, h = img.height * scale;
+    const x = (canvas.width - w) / 2, y = (canvas.height - h) / 2;
+    ctx.drawImage(img, x, y, w, h);
+  } else {
+    // default background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  // draw grid if requested
+  if(showGridCheckbox.checked){
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    const step = 50;
+    for(let gx=0; gx<canvas.width; gx+=step){
+      ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,canvas.height); ctx.stroke();
+    }
+    for(let gy=0; gy<canvas.height; gy+=step){
+      ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(canvas.width,gy); ctx.stroke();
+    }
+  }
+
+  // draw sprite if present and config selected
+  if(state.spriteImage && state.config && state.selectedRow !== null){
+    const img = state.spriteImage;
+    const cfgRow = state.config.rows[state.selectedRow];
+    const frameW = 450; // expected frame width in source pixels
+    const frameH = 450;
+    const cols = Math.floor(img.width / frameW);
+    const rowIndex = state.selectedRow;
+    const sx = (state.frameIndex % cols) * frameW;
+    const sy = rowIndex * frameH;
+    // compute destination position: map spriteOrigin from 3600x1350 to canvas
+    const origin3600x1350 = state.spriteOrigin;
+    const scaleX = canvas.width / 3600;
+    const scaleY = canvas.height / 1350;
+    const scale = Math.min(scaleX, scaleY);
+    const dxBase = origin3600x1350.x * scale;
+    const dyBase = origin3600x1350.y * scale;
+    const actionOffset = computeActionOffset();
+    const dx = dxBase + actionOffset.x * scale;
+    const dy = dyBase + actionOffset.y * scale;
+    const dw = frameW * scale;
+    const dh = frameH * scale;
+    ctx.drawImage(img, sx, sy, frameW, frameH, dx - dw/2, dy - dh/2, dw, dh);
+
+    // origin marker for debugging
+    ctx.fillStyle = 'rgba(255,0,0,0.8)';
+    ctx.beginPath(); ctx.arc(dx, dy, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // update progress bar (simple)
+  progressBar.style.width = state.playing ? '100%' : '0%';
+}
+
+/* -------------------------
+   Debug HUD
+   ------------------------- */
+function updateDebug(){
+  const lines = [];
+  lines.push(`selectedRow: ${state.selectedRow === null ? 'none' : state.selectedRow}`);
+  if(state.config && state.selectedRow !== null){
+    const cfg = state.config.rows[state.selectedRow];
+    lines.push(`cfg.name: ${cfg.name} • frames:${cfg.frames} • duration:${cfg.duration}ms • loop:${cfg.loop} • ideal:${cfg.ideal}`);
+    lines.push(`runtime.frameIndex: ${state.frameIndex} • elapsedInFrame: ${Math.round(state.elapsedInFrame)}ms`);
+    if(state.actionState){
+      if(state.actionState.type === 'sequence'){
+        const s = state.actionState;
+        const remaining = s.totalDuration - (performance.now() - s.startTime);
+        lines.push(`action: sequence step ${s.currentStep+1}/${s.steps.length} • remaining ${Math.max(0,Math.round(remaining))}ms`);
+      } else {
+        const a = state.actionState;
+        const remaining = a.duration - (performance.now() - a.startTime);
+        lines.push(`action: ${a.type} • remaining ${Math.max(0,Math.round(remaining))}ms`);
+      }
+    } else {
+      lines.push('action: none');
+    }
+  }
+  debugContent.textContent = lines.join('\n');
+}
+
+/* -------------------------
+   File drop handlers
+   ------------------------- */
+function setupDropzone(el, handler){
+  el.addEventListener('dragover', e=>{ e.preventDefault(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', e=>{ el.classList.remove('dragover'); });
+  el.addEventListener('drop', async e=>{ e.preventDefault(); el.classList.remove('dragover'); const f = e.dataTransfer.files[0]; if(f) handler(f); });
+}
+setupDropzone(bgDrop, async file=>{
+  try{ const img = await loadImageFromFile(file); state.bgImage = img; draw(); configNotice.textContent = 'Background loaded.'; } catch(e){ configNotice.textContent = 'Failed to load background.'; }
+});
+setupDropzone(spriteDrop, async file=>{
+  try{ const img = await loadImageFromFile(file); state.spriteImage = img; draw(); configNotice.textContent = 'Spritesheet loaded.'; } catch(e){ configNotice.textContent = 'Failed to load spritesheet.'; }
+});
+setupDropzone(configDrop, async file=>{
+  try{
+    const text = await file.text();
+    configText.value = text;
+    configNotice.textContent = 'Config file pasted into textarea. Click Apply Config.';
+  } catch(e){ configNotice.textContent = 'Failed to read config file.'; }
+});
+
+/* -------------------------
+   Buttons and keyboard
+   ------------------------- */
+applyConfigBtn.addEventListener('click', ()=>{
+  try{
+    const parsed = JSON.parse(configText.value);
+    const ok = applyConfig(parsed);
+    if(ok) configNotice.textContent = 'Config applied successfully.';
+  } catch(e){
+    showConfigErrors(['Invalid JSON: ' + e.message]);
+  }
+});
+validateBtn.addEventListener('click', ()=>{
+  try{
+    const parsed = JSON.parse(configText.value);
+    const v = validateConfig(parsed);
+    if(v.valid) { configNotice.textContent = 'Config is valid.'; configNotice.className = ''; }
+    else showConfigErrors(v.errors);
+  } catch(e){ showConfigErrors(['Invalid JSON: ' + e.message]); }
+});
+playRowBtn.addEventListener('click', ()=>playSelectedRow());
+stopBtn.addEventListener('click', ()=>stopPlayback());
+resetSpriteBtn.addEventListener('click', ()=>{
+  state.frameIndex = 0; state.elapsedInFrame = 0; state.actionState = null; draw(); updateDebug();
+});
+debugToggle.addEventListener('click', ()=>{
+  if(debugHud.classList.contains('collapsed')){ debugHud.classList.remove('collapsed'); debugHud.classList.add('expanded'); debugHud.setAttribute('aria-hidden','false'); }
+  else { debugHud.classList.remove('expanded'); debugHud.classList.add('collapsed'); debugHud.setAttribute('aria-hidden','true'); }
+});
+window.addEventListener('keydown', (e)=>{
+  if(e.code === 'Space'){ e.preventDefault(); if(state.playing) stopPlayback(); else playSelectedRow(); }
+  if(e.code === 'ArrowRight'){ // step forward frame
+    if(state.selectedRow !== null){ state.frameIndex = (state.frameIndex + 1) % state.config.rows[state.selectedRow].frames; draw(); updateDebug(); }
+  }
+  if(e.code === 'ArrowLeft'){
+    if(state.selectedRow !== null){ state.frameIndex = (state.frameIndex - 1 + state.config.rows[state.selectedRow].frames) % state.config.rows[state.selectedRow].frames; draw(); updateDebug(); }
+  }
+});
+
+/* -------------------------
+   Initialization
+   ------------------------- */
+function init(){
+  // set canvas size to a comfortable preview (scales with CSS)
+  canvas.width = 1200;
+  canvas.height = 450;
+  draw();
+  updateDebug();
+}
+init();
+
+/* -------------------------
+   Expose small helper for padding guidance
+   - returns padding recipe for converting 1536x1024 to 8:3
+   ------------------------- */
+function paddingRecipeFor8by3(){
+  const baseW = 1536, baseH = 1024;
+  const targetW = Math.round(baseH * (8/3));
+  const padTotal = targetW - baseW;
+  const left = Math.ceil(padTotal/2);
+  const right = Math.floor(padTotal/2);
+  return { baseW, baseH, targetW, left, right };
+}
+// Example usage in console: paddingRecipeFor8by3()
+</script>
+</body>
+</html>
