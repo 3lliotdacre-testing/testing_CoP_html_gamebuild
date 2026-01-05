@@ -1,0 +1,80 @@
+{
+  "rows": [
+    {
+      "name": "Idle",
+      "frames": 4,
+      "duration": 200,
+      "loop": false,
+      "idle_wait": false
+    },
+    {
+      "name": "Walk",
+      "frames": 6,
+      "duration": 120,
+      "loop": false,
+      "idle_wait": false,
+      "action": {
+        "type": "move",
+        "dx": 300,
+        "dy": 0,
+        "duration": 1200,
+        "easing": "linear"
+      }
+    },
+    {
+      "name": "Run",
+      "frames": 8,
+      "duration": 80,
+      "loop": false,
+      "idle_wait": false,
+      "action": {
+        "type": "move",
+        "dx": 600,
+        "dy": 0,
+        "duration": 800,
+        "easing": "linear"
+      }
+    },
+    {
+      "name": "Jump",
+      "frames": 8,
+      "duration": 120,
+      "loop": false,
+      "idle_wait": false,
+      "action": {
+        "type": "arc",
+        "dx": 0,
+        "dy": -160,
+        "duration": 700,
+        "easing": "easeOutQuad",
+        "peak": -120
+      }
+    },
+    {
+      "name": "Slidereturn",
+      "frames": 4,
+      "duration": 100,
+      "loop": false,
+      "idle_wait": false,
+      "action": {
+        "type": "sequence",
+        "steps": [
+          {
+            "type": "move",
+            "dx": 225,
+            "dy": 0,
+            "duration": 150,
+            "easing": "easeOutQuad"
+          },
+          {
+            "type": "move",
+            "dx": -225,
+            "dy": 0,
+            "duration": 150,
+            "easing": "easeInQuad"
+          }
+        ]
+      }
+    }
+  ]
+}
